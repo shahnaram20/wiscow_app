@@ -1,48 +1,43 @@
-name: CI/CD Pipeline
+name: SSH Deployment
 
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:  # This allows you to manually trigger the workflow from the GitHub UI
+      - main  # Trigger on push to the main branch
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2  # Checkout the code from your repo
+      # Step 1: Checkout the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v2  # Checkout the repository
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1  # Set up Docker Buildx for multi-platform support
+      # Step 2: Set up SSH key for the deployment
+      - name: Set up SSH key
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}  # The server's IP or domain (set in GitHub secrets)
+          username: ${{ secrets.SSH_USERNAME }}  # SSH username for the server (set in GitHub secrets)
+          key: ${{ secrets.SSH_PRIVATE_KEY }}  # SSH private key (set in GitHub secrets)
+          port: 22  # Default SSH port, change if using a different port
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}  # Optional: Passphrase for the private key (if it's encrypted)
 
-    - name: Log in to DockerHub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u smusthaf20 --password-stdin
+      # Step 3: Deploy the code or run any necessary commands on the remote server
+      # Example of running a command after successful SSH connection
+      - name: Run deployment commands on the server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          script: |
+            cd /path/to/your/project  # Change this to your project path on the server
+            git pull origin main      # Example command to pull the latest changes
+            docker-compose up -d     # Example command to restart a service (if using Docker Compose)
+            # Add other commands as needed
 
-    - name: Build and Push Docker image to DockerHub
-      run: |
-        docker build -t smusthaf20/wisecow .
-        docker push smusthaf20/wisecow
-
-    - name: Set up SSH connection and deploy to Kubernetes
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.HOST }}  # Set the SSH host (e.g., 10.10.110.19)
-        username: ${{ secrets.USERNAME }}  # Set the SSH username
-        key: ${{ secrets.PRIVATE_KEY }}  # SSH private key to authenticate
-        port: 22  # Default SSH port (you can change if needed)
-        script: |
-          # Navigate to your app directory on the Kubernetes server
-          cd ~/wisecow
-          
-          # Pull the latest code from your GitHub repository
-          git pull origin main
-          
-          # Rebuild and restart the Docker containers (e.g., using Docker Compose or directly with Docker)
-          docker compose down  # Stop containers
-          docker compose up -d --build  # Rebuild and start containers in detached mode
-
-    - name: Clean up
-      run: docker system prune -f  # Optional: Clean up unused Docker images, containers, etc.
 
