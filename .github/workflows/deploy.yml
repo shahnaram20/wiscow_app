@@ -10,26 +10,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # Step 1: Checkout the repository
     - name: Checkout code
       uses: actions/checkout@v3
 
+    # Step 2: Log in to DockerHub
     - name: Log in to DockerHub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u smusthaf20 --password-stdin
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
+    # Step 3: Build and Push Docker image to DockerHub
     - name: Build and Push Docker image
       run: |
-        docker build -t smusthaf20/wisecow .
-        docker push smusthaf20/wisecow
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/wisecow .
+        docker push ${{ secrets.DOCKER_USERNAME }}/wisecow
 
+    # Step 4: Deploy to Kubernetes via SSH
     - name: Deploy to Kubernetes
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.K8S_HOST }}
-        username: ${{ secrets.K8S_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        host: ${{ secrets.K8S_HOST }}               # Server IP
+        username: ${{ secrets.K8S_USER }}           # Server username (e.g., ubuntu)
+        key: ${{ secrets.SSH_PRIVATE_KEY }}         # Private key for SSH
         script: |
+          # Change directory to the location where the app is stored
           cd /path/to/wisecow-app
-          git pull
-          kubectl apply -f k8s/
-          kubectl apply -f k8s/ingress.yaml
+
+          # Ensure the latest code is pulled
+          git pull origin main
+
+          # Apply Kubernetes deployments and services
+          kubectl apply -f k8s/deployment.yaml  # Update with the correct path to your k8s deployment YAML file
+          kubectl apply -f k8s/service.yaml     # Update with the correct path to your service YAML file
+          kubectl apply -f k8s/ingress.yaml    # Update with the correct path to your ingress YAML file
+
+          # Optional: You can add a command to check deployment status
+          kubectl rollout status deployment/wisecow-deployment  # Update with your actual deployment name
+
+          echo "Deployment finished successfully"
 
