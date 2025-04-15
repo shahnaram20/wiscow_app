@@ -4,47 +4,45 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:  # This allows you to manually trigger the workflow from the GitHub UI
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout the repository
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2  # Checkout the code from your repo
 
-    # Step 2: Log in to DockerHub
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1  # Set up Docker Buildx for multi-platform support
+
     - name: Log in to DockerHub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u smusthaf20 --password-stdin
 
-    # Step 3: Build and Push Docker image to DockerHub
-    - name: Build and Push Docker image
+    - name: Build and Push Docker image to DockerHub
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/wisecow .
-        docker push ${{ secrets.DOCKER_USERNAME }}/wisecow
+        docker build -t smusthaf20/wisecow .
+        docker push smusthaf20/wisecow
 
-    # Step 4: Deploy to Kubernetes via SSH
-    - name: Deploy to Kubernetes
+    - name: Set up SSH connection and deploy to Kubernetes
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.K8S_HOST }}               # Server IP
-        username: ${{ secrets.K8S_USER }}           # Server username (e.g., ubuntu)
-        key: ${{ secrets.SSH_PRIVATE_KEY }}         # Private key for SSH
+        host: ${{ secrets.HOST }}  # Set the SSH host (e.g., 10.10.110.19)
+        username: ${{ secrets.USERNAME }}  # Set the SSH username
+        key: ${{ secrets.PRIVATE_KEY }}  # SSH private key to authenticate
+        port: 22  # Default SSH port (you can change if needed)
         script: |
-          # Change directory to the location where the app is stored
-          cd /path/to/wisecow-app
-
-          # Ensure the latest code is pulled
+          # Navigate to your app directory on the Kubernetes server
+          cd ~/wisecow
+          
+          # Pull the latest code from your GitHub repository
           git pull origin main
+          
+          # Rebuild and restart the Docker containers (e.g., using Docker Compose or directly with Docker)
+          docker compose down  # Stop containers
+          docker compose up -d --build  # Rebuild and start containers in detached mode
 
-          # Apply Kubernetes deployments and services
-          kubectl apply -f k8s/deployment.yaml  # Update with the correct path to your k8s deployment YAML file
-          kubectl apply -f k8s/service.yaml     # Update with the correct path to your service YAML file
-          kubectl apply -f k8s/ingress.yaml    # Update with the correct path to your ingress YAML file
-
-          # Optional: You can add a command to check deployment status
-          kubectl rollout status deployment/wisecow-deployment  # Update with your actual deployment name
-
-          echo "Deployment finished successfully"
+    - name: Clean up
+      run: docker system prune -f  # Optional: Clean up unused Docker images, containers, etc.
 
